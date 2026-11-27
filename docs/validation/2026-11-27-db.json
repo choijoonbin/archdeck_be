@@ -1,0 +1,15 @@
+{
+  "database": "PostgreSQL 17.12",
+  "endpoint": "127.0.0.1:55433",
+  "tables": 18,
+  "categories": 4,
+  "tags": 11,
+  "content": 0,
+  "accounts": 0,
+  "sessions": 0,
+  "integrityGroups": 9,
+  "backup": "db/backups/archdeck-baseline-2026-11-27-c9ffd417.dump",
+  "restartPersistence": "passed",
+  "backupRestore": "passed",
+  "restoredIntegrity": "passed"
+}
