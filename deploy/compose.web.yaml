@@ -1,0 +1,21 @@
+# Run from ArchDeck_BE after npm run build in the sibling frontend.
+name: archdeck-web
+services:
+  web:
+    image: caddy:2.10-alpine
+    ports:
+      - "${ARCHDECK_WEB_BIND:-127.0.0.1}:8443:443"
+    environment:
+      ARCHDECK_HOST: ${ARCHDECK_HOST:-localhost}
+      ARCHDECK_BACKEND_PORT: ${ARCHDECK_BACKEND_PORT:-4000}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../../ArchDeck_FE/dist:/srv:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+volumes:
+  caddy_data:
+  caddy_config:

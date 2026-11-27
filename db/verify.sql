@@ -23,10 +23,10 @@ DECLARE
 BEGIN
   SELECT count(*) INTO actual_count FROM information_schema.tables
   WHERE table_schema = 'archdeck' AND table_type = 'BASE TABLE';
-  IF actual_count <> 18 THEN
-    RAISE EXCEPTION 'Expected 18 base tables, got %', actual_count;
+  IF actual_count < 18 THEN
+    RAISE EXCEPTION 'Expected at least the 18 baseline tables, got %', actual_count;
   END IF;
-  RAISE NOTICE 'PASS: 18-table schema is present';
+  RAISE NOTICE 'PASS: 18-table baseline is present (additional migrated tables allowed)';
 
   SELECT id INTO STRICT category_id_value FROM categories WHERE slug = 'identity-and-access';
   SELECT id INTO STRICT tag_id_value FROM tags WHERE slug = 'oidc';

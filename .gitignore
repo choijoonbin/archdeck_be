@@ -46,3 +46,8 @@ node_version_backup/data/
 /db/backups/
 *.pem
 *.key
+
+# Local scripts and isolated test output
+__pycache__/
+*.pyc
+output/

@@ -1,0 +1,17 @@
+{$ARCHDECK_HOST:localhost} {
+    tls internal
+    encode zstd gzip
+    handle /api/* {
+        reverse_proxy host.docker.internal:{$ARCHDECK_BACKEND_PORT:4000}
+    }
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy same-origin
+        X-Frame-Options DENY
+    }
+}

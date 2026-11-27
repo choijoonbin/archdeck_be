@@ -1,7 +1,7 @@
 name: archdeck
 
-# Planning scaffold: PostgreSQL only. Existing Spring Boot/H2 and frontend
-# processes are not changed or connected by this file.
+# PostgreSQL service for the Spring Boot application. The application runs
+# separately and receives connection credentials through its process environment.
 services:
   db:
     image: ${ARCHDECK_POSTGRES_IMAGE:-postgres:17.12-bookworm}
