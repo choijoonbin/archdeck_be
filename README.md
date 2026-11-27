@@ -15,6 +15,7 @@ Spring Boot API와 공통 기획·DB·Docker 기반을 관리한다. 개발 브�
 | [로그인과 공유](docs/04-auth-and-sharing.md) | 세션·관리자/열람자 |
 | [누적 작업 계획](docs/05-implementation-plan.md) | 기존 문제·우선순위 |
 | [검증 결과](docs/06-validation.md) | 실제 확인과 남은 작업 |
+| [Agent 통합 계획](docs/12-agent-implementation-plan.md) | 최신 기술·Azure·수집·근거·UI·구현 경계 |
 | [파일 구조와 Git](docs/08-repository-layout.md) | 두 저장소의 책임과 제외 기준 |
 
 ## 현재 백엔드 실행
@@ -53,3 +54,7 @@ SQL은 빈 볼륨 최초 생성 때만 적용한다. 계정·학습 본문은 se
 [node_version_backup](node_version_backup/README.md)은 이전 Express 소스 보존용이다. 현재 기준은 Spring Boot다.
 
 소스·잠금 파일·환경 예시·문서·Docker·SQL은 추적한다. 실제 .env·data·db/backups·target·node_modules·dist·로그는 로컬에 보존하고 제외한다.
+
+## 리서치 Agent
+
+[archdeck_agent](https://github.com/choijoonbin/archdeck_agent/tree/dev)는 별도 FastAPI·LangGraph 서버다. 지정 분야의 수집·지식화 후보를 만들고 BE가 검토·게시한다. 현재는 합성 fixture와 Azure DWP호환 어댑터 골격이며 실제 수집·모델·스케줄·게시 연동은 후속이다.

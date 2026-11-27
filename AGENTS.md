@@ -25,3 +25,7 @@
 ## 문서
 
 00-project-baseline은 제품 기준, 01-benchmark는 공식 출처 벤치마킹, 02-product-and-navigation은 UX, 03-data-and-docker는 DB, 04-auth-and-sharing은 인증, 05-implementation-plan은 작업 목록, 06-validation은 검증 근거, 08-repository-layout은 저장소 구조다. 모두 docs 아래에 있다.
+
+## Agent 확장
+
+지정 분야 최신 정보 수집·지식화는 최신 요구다. 09~12 문서를 읽는다. 기본 모델은 DWP 호환 Azure OpenAI, 분야는 인증·보안·웹 아키텍처와 AI 에이전트다. 분야/출처/정책은 데이터로 확장한다. Agent는 별도 저장소이며 BE만 정책·실행·검토·게시를 소유한다. 실제 수집·비용 발생 호출·스케줄 활성화와 골격 검증을 구분한다.

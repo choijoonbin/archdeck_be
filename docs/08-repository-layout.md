@@ -1,14 +1,15 @@
 # ArchDeck 저장소와 폴더 관리
 
-기준일: 2026-11-27 · 개발 브랜치: 두 저장소 모두 dev
+기준일: 2026-11-27 · 개발 브랜치: 세 저장소 모두 dev
 
-archdeck_be와 archdeck_fe는 독립 저장소다. ArchDeck 루트는 두 저장소의 로컬 작업 공간이다. 이력이 필요한 설계·SQL·Docker 파일을 백엔드 저장소로 모았다.
+archdeck_be·archdeck_fe·archdeck_agent는 독립 저장소다. ArchDeck 루트는 세 저장소의 로컬 작업 공간이다. 이력이 필요한 설계·SQL·Docker 파일을 백엔드 저장소로 모았다.
 
 ## 최종 위치
 
 | 항목 | 위치 | 이유 |
 |---|---|---|
 | Spring Boot·이전 Node | ArchDeck_BE | 현재 소스 기준선과 이전 구현 보존 |
+| 리서치 Agent·하네스·Azure adapter·자체 Dockerfile | ArchDeck_Agent | 별도 실행·의존성·검증·이력 |
 | React·빌드 설정·잠금 파일 | ArchDeck_FE | 독립 빌드와 이력 |
 | 공통 기획·벤치마킹·UX·인증·작업 | ArchDeck_BE/docs | 원본 한 곳, FE는 링크 참조 |
 | 테이블·분류 seed·검증 SQL | ArchDeck_BE/db | Docker와 향후 마이그레이션 소스 |
@@ -38,3 +39,7 @@ dev는 origin/dev를 추적한다. 이 작업에서 임의의 main 브랜치나 
 - 18개 테이블·분류 4개·태그 11개를 보존했고 db/verify.sql의 9개 검사 그룹이 통과했다.
 - 프론트 npm run build와 백엔드 Maven 오프라인 검사가 통과했다. Maven에는 실행할 자동 테스트가 없음을 구분한다.
 - 앱 기능 소스는 각 저장소의 최초 기준선 커밋과 차이가 없다. 문서·설정 소속 정리는 후속 커밋으로 분리한다.
+
+## Agent 저장소 추가
+
+새 원격은 https://github.com/choijoonbin/archdeck_agent.git 이다. 공통 기획은 BE/docs/09~12, Agent 실행·의존성·테스트는 Agent 저장소에서 관리한다. 공통 DB compose와 기존 18개 테이블은 이 설계 작업에서 변경하지 않는다.
