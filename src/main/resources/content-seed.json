@@ -22,42 +22,60 @@
           "label": "End User / Browser",
           "subLabel": "Client Agent",
           "type": "client",
-          "icon": "User"
+          "icon": "User",
+          "x": 120,
+          "y": 120,
+          "trustZone": "Browser"
         },
         {
           "id": "app",
           "label": "Frontend (SPA/Web)",
           "subLabel": "React / Next.js",
           "type": "client",
-          "icon": "Layout"
+          "icon": "Layout",
+          "x": 120,
+          "y": 320,
+          "trustZone": "Browser"
         },
         {
           "id": "iam",
           "label": "Keycloak IAM Cluster",
           "subLabel": "OIDC / Infinispan",
           "type": "auth",
-          "icon": "ShieldCheck"
+          "icon": "ShieldCheck",
+          "x": 420,
+          "y": 120,
+          "trustZone": "IAM"
         },
         {
           "id": "gateway",
           "label": "API Gateway / BFF",
           "subLabel": "Envoy / Spring Cloud",
           "type": "gateway",
-          "icon": "Network"
+          "icon": "Network",
+          "x": 720,
+          "y": 120,
+          "trustZone": "Gateway"
         },
         {
           "id": "services",
           "label": "Core Microservices",
           "subLabel": "Stateless APIs",
           "type": "server",
-          "icon": "Server"
+          "icon": "Server",
+          "x": 1020,
+          "y": 120,
+          "trustZone": "Resource Server"
         },
         {
           "id": "user_db",
           "label": "IAM Database / LDAP",
           "subLabel": "PostgreSQL / AD",
           "type": "database",
-          "icon": "Database"
+          "icon": "Database",
+          "x": 1320,
+          "y": 120,
+          "trustZone": "Identity Store"
         }
       ],
       "flowSteps": [
@@ -75,6 +93,9 @@
             "user",
             "app",
             "iam"
+          ],
+          "activeEdgeIds": [
+            "step1-1"
           ]
         },
         {
@@ -90,6 +111,9 @@
           "activeNodes": [
             "iam",
             "user_db"
+          ],
+          "activeEdgeIds": [
+            "step2-1"
           ]
         },
         {
@@ -105,6 +129,9 @@
           "activeNodes": [
             "iam",
             "app"
+          ],
+          "activeEdgeIds": [
+            "step3-1"
           ]
         },
         {
@@ -121,6 +148,10 @@
             "app",
             "gateway",
             "services"
+          ],
+          "activeEdgeIds": [
+            "step4-1",
+            "step4-2"
           ]
         }
       ],
@@ -176,6 +207,53 @@
         "spa-pkce-direct",
         "bff-token-relay",
         "spa-vs-bff-comparison"
+      ],
+      "diagramEdges": [
+        {
+          "id": "step1-1",
+          "source": "app",
+          "target": "iam",
+          "label": "인증 요청 및 SSO 리다이렉트",
+          "protocol": "HTTPS GET (Front-Channel)",
+          "type": "request",
+          "trustBoundary": "Browser / IAM"
+        },
+        {
+          "id": "step2-1",
+          "source": "iam",
+          "target": "user_db",
+          "label": "사용자 자격 증명 검증 및 MFA",
+          "protocol": "Internal DB Query / LDAP Bind",
+          "type": "request",
+          "trustBoundary": "IAM / Identity Store"
+        },
+        {
+          "id": "step3-1",
+          "source": "iam",
+          "target": "app",
+          "label": "인가 코드 반환 및 토큰 발급",
+          "protocol": "HTTPS 302 Redirect → POST /token",
+          "type": "request",
+          "trustBoundary": "IAM / Browser"
+        },
+        {
+          "id": "step4-1",
+          "source": "app",
+          "target": "gateway",
+          "label": "JWKS 기반 무상태(Stateless) API 인가",
+          "protocol": "HTTPS REST (Bearer JWT)",
+          "type": "request",
+          "trustBoundary": "Browser / Gateway"
+        },
+        {
+          "id": "step4-2",
+          "source": "gateway",
+          "target": "services",
+          "label": "JWKS 기반 무상태(Stateless) API 인가",
+          "protocol": "HTTPS REST (Bearer JWT)",
+          "type": "request",
+          "trustBoundary": "Gateway / Resource Server"
+        }
       ]
     },
     {
@@ -200,28 +278,40 @@
           "label": "SPA App (React)",
           "subLabel": "In-Memory Storage",
           "type": "client",
-          "icon": "Code"
+          "icon": "Code",
+          "x": 120,
+          "y": 120,
+          "trustZone": "Browser"
         },
         {
           "id": "browser",
           "label": "Web Browser Context",
           "subLabel": "User-Agent / DOM",
           "type": "client",
-          "icon": "Globe"
+          "icon": "Globe",
+          "x": 120,
+          "y": 320,
+          "trustZone": "Browser"
         },
         {
           "id": "iam",
           "label": "Keycloak OIDC",
           "subLabel": "Authorization Server",
           "type": "auth",
-          "icon": "ShieldCheck"
+          "icon": "ShieldCheck",
+          "x": 420,
+          "y": 120,
+          "trustZone": "IAM"
         },
         {
           "id": "api",
           "label": "Resource Server",
           "subLabel": "Backend APIs",
           "type": "server",
-          "icon": "Server"
+          "icon": "Server",
+          "x": 720,
+          "y": 120,
+          "trustZone": "Resource Server"
         }
       ],
       "flowSteps": [
@@ -238,6 +328,9 @@
           "activeNodes": [
             "spa",
             "browser"
+          ],
+          "activeEdgeIds": [
+            "step1-1"
           ]
         },
         {
@@ -253,6 +346,10 @@
           "activeNodes": [
             "browser",
             "iam"
+          ],
+          "activeEdgeIds": [
+            "step2-1",
+            "step2-2"
           ]
         },
         {
@@ -268,6 +365,10 @@
           "activeNodes": [
             "spa",
             "iam"
+          ],
+          "activeEdgeIds": [
+            "step3-1",
+            "step3-2"
           ]
         },
         {
@@ -283,6 +384,28 @@
           "activeNodes": [
             "spa",
             "api"
+          ],
+          "activeEdgeIds": [
+            "step4-1",
+            "step4-2"
+          ]
+        },
+        {
+          "step": 5,
+          "title": "PKCE 불일치 예외",
+          "actor": "Keycloak OIDC",
+          "target": "SPA App (React)",
+          "action": "code_verifier 검증 실패 시 토큰 발급 거부",
+          "description": "code_verifier가 S256 challenge와 일치하지 않으면 invalid_grant로 요청을 거부합니다. 인증 코드를 재사용하지 않고 새로운 로그인 흐름을 시작합니다.",
+          "protocol": "OAuth 2.0",
+          "payloadExample": "HTTP 400 {\"error\":\"invalid_grant\"}",
+          "securityNote": "오류 로그에 인증 코드, verifier, 토큰을 기록하지 않습니다.",
+          "activeNodes": [
+            "iam",
+            "spa"
+          ],
+          "activeEdgeIds": [
+            "pkce-rejected"
           ]
         }
       ],
@@ -337,6 +460,80 @@
         "keycloak-iam-overview",
         "bff-token-relay",
         "spa-vs-bff-comparison"
+      ],
+      "diagramEdges": [
+        {
+          "id": "step1-1",
+          "source": "spa",
+          "target": "browser",
+          "label": "PKCE Key Pair(Verifier & Challenge) 생성",
+          "protocol": "Web Crypto API (crypto.subtle)",
+          "type": "internal",
+          "trustBoundary": ""
+        },
+        {
+          "id": "step2-1",
+          "source": "browser",
+          "target": "iam",
+          "label": "Authorization Code 요청 (Redirect)",
+          "protocol": "HTTPS GET /protocol/openid-connect/auth",
+          "type": "request",
+          "trustBoundary": "Browser / IAM"
+        },
+        {
+          "id": "step2-2",
+          "source": "iam",
+          "target": "browser",
+          "label": "인가 코드 반환",
+          "protocol": "HTTPS GET /protocol/openid-connect/auth",
+          "type": "response",
+          "trustBoundary": "IAM / Browser"
+        },
+        {
+          "id": "step3-1",
+          "source": "spa",
+          "target": "iam",
+          "label": "인가 코드 및 Verifier를 통한 토큰 교환",
+          "protocol": "HTTPS POST /protocol/openid-connect/token",
+          "type": "request",
+          "trustBoundary": "Browser / IAM"
+        },
+        {
+          "id": "step3-2",
+          "source": "iam",
+          "target": "spa",
+          "label": "토큰 응답",
+          "protocol": "HTTPS POST /protocol/openid-connect/token",
+          "type": "response",
+          "trustBoundary": "IAM / Browser"
+        },
+        {
+          "id": "step4-1",
+          "source": "spa",
+          "target": "api",
+          "label": "인메모리 저장 및 Bearer API 호출",
+          "protocol": "HTTPS REST (Authorization: Bearer)",
+          "type": "request",
+          "trustBoundary": "Browser / Resource Server"
+        },
+        {
+          "id": "step4-2",
+          "source": "api",
+          "target": "spa",
+          "label": "보호 리소스 응답",
+          "protocol": "HTTPS REST (Authorization: Bearer)",
+          "type": "response",
+          "trustBoundary": "Resource Server / Browser"
+        },
+        {
+          "id": "pkce-rejected",
+          "source": "iam",
+          "target": "spa",
+          "label": "PKCE 검증 실패 · invalid_grant",
+          "protocol": "OAuth 2.0",
+          "type": "error",
+          "trustBoundary": "IAM / Browser"
+        }
       ]
     },
     {
@@ -362,35 +559,50 @@
           "label": "Client (SPA)",
           "subLabel": "No Tokens Held",
           "type": "client",
-          "icon": "Layout"
+          "icon": "Layout",
+          "x": 120,
+          "y": 120,
+          "trustZone": "Browser"
         },
         {
           "id": "bff",
           "label": "BFF Server (Node/Go/Java)",
           "subLabel": "Confidential Client",
           "type": "gateway",
-          "icon": "Cpu"
+          "icon": "Cpu",
+          "x": 420,
+          "y": 120,
+          "trustZone": "BFF"
         },
         {
           "id": "redis",
           "label": "Session Store (Redis HA)",
           "subLabel": "Cluster / Sentinel",
           "type": "database",
-          "icon": "Database"
+          "icon": "Database",
+          "x": 720,
+          "y": 120,
+          "trustZone": "Session Store"
         },
         {
           "id": "iam",
           "label": "Keycloak (IAM)",
           "subLabel": "Back-Channel Auth",
           "type": "auth",
-          "icon": "ShieldCheck"
+          "icon": "ShieldCheck",
+          "x": 1020,
+          "y": 120,
+          "trustZone": "IAM"
         },
         {
           "id": "services",
           "label": "Internal Microservices",
           "subLabel": "Stateless Bearer JWT",
           "type": "server",
-          "icon": "Server"
+          "icon": "Server",
+          "x": 1320,
+          "y": 120,
+          "trustZone": "Resource Server"
         }
       ],
       "flowSteps": [
@@ -407,6 +619,10 @@
           "activeNodes": [
             "bff",
             "iam"
+          ],
+          "activeEdgeIds": [
+            "step1-1",
+            "step1-2"
           ]
         },
         {
@@ -423,6 +639,10 @@
             "bff",
             "redis",
             "browser"
+          ],
+          "activeEdgeIds": [
+            "step2-1",
+            "step2-2"
           ]
         },
         {
@@ -439,6 +659,10 @@
             "browser",
             "bff",
             "redis"
+          ],
+          "activeEdgeIds": [
+            "step3-1",
+            "step3-2"
           ]
         },
         {
@@ -454,6 +678,10 @@
           "activeNodes": [
             "bff",
             "services"
+          ],
+          "activeEdgeIds": [
+            "step4-1",
+            "step4-2"
           ]
         },
         {
@@ -470,6 +698,10 @@
             "bff",
             "redis",
             "iam"
+          ],
+          "activeEdgeIds": [
+            "step5-1",
+            "step5-2"
           ]
         }
       ],
@@ -529,6 +761,98 @@
         "spa-pkce-direct",
         "spa-vs-bff-comparison",
         "xss-vs-csrf-defense"
+      ],
+      "diagramEdges": [
+        {
+          "id": "step1-1",
+          "source": "bff",
+          "target": "iam",
+          "label": "BFF 백채널 인증 및 인가 코드 교환",
+          "protocol": "HTTPS POST /token (Back-Channel)",
+          "type": "request",
+          "trustBoundary": "BFF / IAM"
+        },
+        {
+          "id": "step1-2",
+          "source": "iam",
+          "target": "bff",
+          "label": "백채널 토큰 응답",
+          "protocol": "HTTPS POST /token (Back-Channel)",
+          "type": "response",
+          "trustBoundary": "IAM / BFF"
+        },
+        {
+          "id": "step2-1",
+          "source": "bff",
+          "target": "redis",
+          "label": "Redis 세션 저장 및 암호화 쿠키 발행",
+          "protocol": "Internal TCP (RESP) → Set-Cookie",
+          "type": "request",
+          "trustBoundary": "BFF / Session Store"
+        },
+        {
+          "id": "step2-2",
+          "source": "bff",
+          "target": "browser",
+          "label": "HttpOnly 세션 쿠키 응답",
+          "protocol": "Internal TCP (RESP) → Set-Cookie",
+          "type": "response",
+          "trustBoundary": "BFF / Browser"
+        },
+        {
+          "id": "step3-1",
+          "source": "browser",
+          "target": "bff",
+          "label": "세션 기반 API 호출 및 CSRF 검증",
+          "protocol": "HTTPS (Session Cookie + X-XSRF-TOKEN)",
+          "type": "request",
+          "trustBoundary": "Browser / BFF"
+        },
+        {
+          "id": "step3-2",
+          "source": "bff",
+          "target": "redis",
+          "label": "세션 기반 API 호출 및 CSRF 검증",
+          "protocol": "HTTPS (Session Cookie + X-XSRF-TOKEN)",
+          "type": "request",
+          "trustBoundary": "BFF / Session Store"
+        },
+        {
+          "id": "step4-1",
+          "source": "bff",
+          "target": "services",
+          "label": "자동 토큰 릴레이(Token Relay) & 백엔드 프록시",
+          "protocol": "Internal HTTPS (Authorization: Bearer <JWT>)",
+          "type": "request",
+          "trustBoundary": "BFF / Resource Server"
+        },
+        {
+          "id": "step4-2",
+          "source": "services",
+          "target": "bff",
+          "label": "내부 리소스 응답",
+          "protocol": "Internal HTTPS (Authorization: Bearer <JWT>)",
+          "type": "response",
+          "trustBoundary": "Resource Server / BFF"
+        },
+        {
+          "id": "step5-1",
+          "source": "bff",
+          "target": "redis",
+          "label": "킬 스위치 (Kill Switch) 즉시 세션 차단",
+          "protocol": "Redis DEL key / OIDC Back-Channel Logout",
+          "type": "request",
+          "trustBoundary": "BFF / Session Store"
+        },
+        {
+          "id": "step5-2",
+          "source": "bff",
+          "target": "iam",
+          "label": "킬 스위치 (Kill Switch) 즉시 세션 차단",
+          "protocol": "Redis DEL key / OIDC Back-Channel Logout",
+          "type": "request",
+          "trustBoundary": "BFF / IAM"
+        }
       ]
     },
     {
@@ -552,28 +876,40 @@
           "label": "Option A: SPA + PKCE",
           "subLabel": "Public Client Direct",
           "type": "client",
-          "icon": "Layout"
+          "icon": "Layout",
+          "x": 120,
+          "y": 120,
+          "trustZone": "Browser"
         },
         {
           "id": "bff_arch",
           "label": "Option B: BFF Pattern",
           "subLabel": "Confidential Client Relay",
           "type": "gateway",
-          "icon": "ShieldCheck"
+          "icon": "ShieldCheck",
+          "x": 420,
+          "y": 120,
+          "trustZone": "BFF"
         },
         {
           "id": "iam",
           "label": "Central IAM (Keycloak)",
           "subLabel": "Common Auth Authority",
           "type": "auth",
-          "icon": "Key"
+          "icon": "Key",
+          "x": 720,
+          "y": 120,
+          "trustZone": "IAM"
         },
         {
           "id": "apis",
           "label": "Microservice APIs",
           "subLabel": "Resource Servers",
           "type": "server",
-          "icon": "Server"
+          "icon": "Server",
+          "x": 1020,
+          "y": 120,
+          "trustZone": "Resource Server"
         }
       ],
       "flowSteps": [
@@ -591,6 +927,10 @@
             "spa_arch",
             "bff_arch",
             "iam"
+          ],
+          "activeEdgeIds": [
+            "step1-1",
+            "step1-2"
           ]
         },
         {
@@ -606,6 +946,10 @@
           "activeNodes": [
             "spa_arch",
             "bff_arch"
+          ],
+          "activeEdgeIds": [
+            "step2-1",
+            "step2-2"
           ]
         },
         {
@@ -622,6 +966,10 @@
             "spa_arch",
             "bff_arch",
             "apis"
+          ],
+          "activeEdgeIds": [
+            "step3-1",
+            "step3-2"
           ]
         }
       ],
@@ -668,6 +1016,62 @@
         "spa-pkce-direct",
         "bff-token-relay",
         "xss-vs-csrf-defense"
+      ],
+      "diagramEdges": [
+        {
+          "id": "step1-1",
+          "source": "spa_arch",
+          "target": "iam",
+          "label": "클라이언트 신뢰 등급 (Client Trust Level)",
+          "protocol": "RFC 6749 Classification",
+          "type": "request",
+          "trustBoundary": "Browser / IAM"
+        },
+        {
+          "id": "step1-2",
+          "source": "bff_arch",
+          "target": "iam",
+          "label": "클라이언트 신뢰 등급 (Client Trust Level)",
+          "protocol": "RFC 6749 Classification",
+          "type": "request",
+          "trustBoundary": "BFF / IAM"
+        },
+        {
+          "id": "step2-1",
+          "source": "spa_arch",
+          "target": "apis",
+          "label": "토큰의 물리적 보관 위치 (Token Residence)",
+          "protocol": "In-Memory vs Redis Store",
+          "type": "request",
+          "trustBoundary": "Browser / Resource Server"
+        },
+        {
+          "id": "step2-2",
+          "source": "bff_arch",
+          "target": "apis",
+          "label": "토큰의 물리적 보관 위치 (Token Residence)",
+          "protocol": "In-Memory vs Redis Store",
+          "type": "request",
+          "trustBoundary": "BFF / Resource Server"
+        },
+        {
+          "id": "step3-1",
+          "source": "apis",
+          "target": "spa_arch",
+          "label": "주요 공격 표면 및 방어 초점 (Threat Surface)",
+          "protocol": "XSS vs CSRF Matrix",
+          "type": "request",
+          "trustBoundary": "Resource Server / Browser"
+        },
+        {
+          "id": "step3-2",
+          "source": "apis",
+          "target": "bff_arch",
+          "label": "주요 공격 표면 및 방어 초점 (Threat Surface)",
+          "protocol": "XSS vs CSRF Matrix",
+          "type": "request",
+          "trustBoundary": "Resource Server / BFF"
+        }
       ]
     },
     {
@@ -692,28 +1096,40 @@
           "label": "Attacker / Malicious Site",
           "subLabel": "Phishing / Exploit",
           "type": "client",
-          "icon": "AlertTriangle"
+          "icon": "AlertTriangle",
+          "x": 120,
+          "y": 120,
+          "trustZone": "External"
         },
         {
           "id": "victim_browser",
           "label": "Victim's Browser",
           "subLabel": "Holds Cookies / DOM",
           "type": "client",
-          "icon": "Globe"
+          "icon": "Globe",
+          "x": 420,
+          "y": 120,
+          "trustZone": "Browser"
         },
         {
           "id": "target_server",
           "label": "Vulnerable App Server",
           "subLabel": "State-Changing APIs",
           "type": "server",
-          "icon": "Server"
+          "icon": "Server",
+          "x": 720,
+          "y": 120,
+          "trustZone": "Resource Server"
         },
         {
           "id": "defense_layer",
           "label": "Defense: CSP & SameSite",
           "subLabel": "Browser & WAF Defense",
           "type": "gateway",
-          "icon": "ShieldCheck"
+          "icon": "ShieldCheck",
+          "x": 1020,
+          "y": 120,
+          "trustZone": "Security Controls"
         }
       ],
       "flowSteps": [
@@ -730,6 +1146,9 @@
           "activeNodes": [
             "attacker",
             "victim_browser"
+          ],
+          "activeEdgeIds": [
+            "step1-1"
           ]
         },
         {
@@ -745,6 +1164,9 @@
           "activeNodes": [
             "victim_browser",
             "defense_layer"
+          ],
+          "activeEdgeIds": [
+            "step2-1"
           ]
         },
         {
@@ -760,6 +1182,9 @@
           "activeNodes": [
             "defense_layer",
             "target_server"
+          ],
+          "activeEdgeIds": [
+            "step3-1"
           ]
         }
       ],
@@ -812,6 +1237,35 @@
         "bff-token-relay",
         "spa-pkce-direct",
         "spa-vs-bff-comparison"
+      ],
+      "diagramEdges": [
+        {
+          "id": "step1-1",
+          "source": "attacker",
+          "target": "victim_browser",
+          "label": "공격 벡터의 차이: 스크립트 실행(XSS) vs 요청 위조(CSRF)",
+          "protocol": "Malicious Payload Injection",
+          "type": "request",
+          "trustBoundary": "External / Browser"
+        },
+        {
+          "id": "step2-1",
+          "source": "victim_browser",
+          "target": "defense_layer",
+          "label": "XSS 방어 체계: 안전한 렌더링 & CSP Level 3",
+          "protocol": "HTTP Header & Sanitization",
+          "type": "request",
+          "trustBoundary": "Browser / Security Controls"
+        },
+        {
+          "id": "step3-1",
+          "source": "defense_layer",
+          "target": "target_server",
+          "label": "CSRF 방어 체계: SameSite 쿠키 & X-XSRF-TOKEN",
+          "protocol": "Double Submit Cookie Pattern",
+          "type": "request",
+          "trustBoundary": "Security Controls / Resource Server"
+        }
       ]
     }
   ],

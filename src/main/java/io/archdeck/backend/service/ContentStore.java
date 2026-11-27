@@ -64,6 +64,7 @@ public class ContentStore {
                 p.put("summary", r.getString("summary"));
                 p.put("overview", r.getString("body_markdown"));
                 p.set("diagramNodes", nodes(r.getString("id")));
+                p.set("diagramEdges", edges(r.getString("id")));
                 p.set("flowSteps", steps(r.getString("id")));
               } else if (kind.equals("glossary")) {
                 p.put("term", r.getString("title"));
@@ -103,7 +104,28 @@ public class ContentStore {
               n.put("label", r.get("label").toString());
               n.put("subLabel", r.get("sub_label").toString());
               n.put("icon", r.get("icon_key").toString());
+              n.put("trustZone", r.get("trust_zone").toString());
+              if (r.get("x") != null) n.put("x", ((Number) r.get("x")).doubleValue());
+              if (r.get("y") != null) n.put("y", ((Number) r.get("y")).doubleValue());
               a.add(n);
+            });
+    return a;
+  }
+
+  private ArrayNode edges(String id) {
+    ArrayNode a = json.createArrayNode();
+    db.queryForList(
+            "select * from archdeck.flow_edges where content_id=?::uuid order by position", id)
+        .forEach(
+            r -> {
+              ObjectNode n = a.addObject();
+              n.put("id", r.get("edge_key").toString());
+              n.put("source", r.get("source_node_key").toString());
+              n.put("target", r.get("target_node_key").toString());
+              n.put("label", r.get("label").toString());
+              n.put("protocol", r.get("protocol").toString());
+              n.put("type", r.get("edge_type").toString());
+              n.put("trustBoundary", r.get("trust_boundary").toString());
             });
     return a;
   }
@@ -127,11 +149,19 @@ public class ContentStore {
               ArrayNode active = json.createArrayNode();
               db.queryForList(
                       "select node_key from archdeck.flow_step_nodes where content_id=?::uuid and"
-                          + " step_key=?",
+                          + " step_key=? order by node_key",
                       id,
                       r.get("step_key"))
                   .forEach(v -> active.add(v.get("node_key").toString()));
               n.set("activeNodes", active);
+              ArrayNode activeEdges = json.createArrayNode();
+              db.queryForList(
+                      "select edge_key from archdeck.flow_step_edges where content_id=?::uuid and"
+                          + " step_key=? order by position",
+                      id,
+                      r.get("step_key"))
+                  .forEach(v -> activeEdges.add(v.get("edge_key").toString()));
+              n.set("activeEdgeIds", activeEdges);
               a.add(n);
             });
     return a;
@@ -209,6 +239,7 @@ public class ContentStore {
             "publishedAt",
             "lockVersion",
             "diagramNodes",
+            "diagramEdges",
             "flowSteps")) payload.remove(key);
     payload.put("legacyId", legacy);
     String category = input.path("category").asText("IAM & Auth");
@@ -254,15 +285,33 @@ public class ContentStore {
       for (JsonNode node : input.path("diagramNodes")) {
         db.update(
             "insert into"
-                + " archdeck.flow_nodes(content_id,node_key,node_type,label,sub_label,icon_key,position)values(?,?,?,?,?,?,?)",
+                + " archdeck.flow_nodes(content_id,node_key,node_type,label,sub_label,icon_key,position,x,y,trust_zone)values(?,?,?,?,?,?,?,?,?,?)",
             id,
             node.path("id").asText(),
             node.path("type").asText("server"),
             node.path("label").asText(),
             node.path("subLabel").asText(),
             node.path("icon").asText("Server"),
-            i++);
+            i++,
+            node.hasNonNull("x") ? node.get("x").asDouble() : null,
+            node.hasNonNull("y") ? node.get("y").asDouble() : null,
+            node.path("trustZone").asText());
       }
+      i = 0;
+      for (JsonNode edge : input.path("diagramEdges"))
+        db.update(
+            "insert into"
+                + " archdeck.flow_edges(content_id,edge_key,source_node_key,target_node_key,label,protocol,edge_type,position,trust_boundary)"
+                + " values(?,?,?,?,?,?,?,?,?)",
+            id,
+            edge.path("id").asText(),
+            edge.path("source").asText(),
+            edge.path("target").asText(),
+            edge.path("label").asText(),
+            edge.path("protocol").asText(),
+            edge.path("type").asText("request"),
+            i++,
+            edge.path("trustBoundary").asText());
       int position = 1;
       for (JsonNode step : input.path("flowSteps")) {
         String key = "step" + position;
@@ -286,6 +335,15 @@ public class ContentStore {
               id,
               key,
               active.asText());
+        int edgePosition = 0;
+        for (JsonNode edge : step.path("activeEdgeIds"))
+          db.update(
+              "insert into archdeck.flow_step_edges(content_id,step_key,edge_key,position)"
+                  + " values(?,?,?,?)",
+              id,
+              key,
+              edge.asText(),
+              edgePosition++);
       }
     }
     db.update(
@@ -306,6 +364,7 @@ public class ContentStore {
               List.of(
                   "badges",
                   "diagramNodes",
+                  "diagramEdges",
                   "flowSteps",
                   "keyTakeaways",
                   "codeSnippets",
@@ -333,15 +392,40 @@ public class ContentStore {
           throw new ResponseStatusException(BAD_REQUEST, "tradeoffs_array_required");
       }
       Set<String> nodes = new HashSet<>();
-      for (JsonNode node : input.path("diagramNodes"))
-        if (!nodes.add(node.path("id").asText()) || node.path("label").asText().isBlank())
+      for (JsonNode node : input.path("diagramNodes")) {
+        if (node.path("id").asText().isBlank()
+            || !nodes.add(node.path("id").asText())
+            || node.path("label").asText().isBlank())
           throw new ResponseStatusException(BAD_REQUEST, "invalid_graph_node");
+        for (String coordinate : List.of("x", "y"))
+          if (node.hasNonNull(coordinate)
+              && (!node.path(coordinate).isNumber()
+                  || !Double.isFinite(node.path(coordinate).asDouble())
+                  || Math.abs(node.path(coordinate).asDouble()) > 99999999))
+            throw new ResponseStatusException(BAD_REQUEST, "invalid_graph_coordinate");
+      }
+      Set<String> edges = new HashSet<>();
+      for (JsonNode edge : input.path("diagramEdges")) {
+        if (edge.path("id").asText().isBlank()
+            || !edges.add(edge.path("id").asText())
+            || !nodes.contains(edge.path("source").asText())
+            || !nodes.contains(edge.path("target").asText())
+            || !List.of("request", "response", "event", "internal", "error")
+                .contains(edge.path("type").asText("request")))
+          throw new ResponseStatusException(BAD_REQUEST, "invalid_graph_edge");
+      }
       for (JsonNode step : input.path("flowSteps")) {
         if (step.path("title").asText().isBlank())
           throw new ResponseStatusException(BAD_REQUEST, "step_title_required");
-        for (JsonNode active : step.path("activeNodes"))
-          if (!nodes.contains(active.asText()))
-            throw new ResponseStatusException(BAD_REQUEST, "unknown_graph_node");
+        for (String field : List.of("activeNodes", "activeEdgeIds")) {
+          if (step.has(field) && !step.path(field).isArray())
+            throw new ResponseStatusException(BAD_REQUEST, "invalid_graph_highlight");
+          Set<String> unique = new HashSet<>();
+          for (JsonNode active : step.path(field))
+            if (!(field.equals("activeNodes") ? nodes : edges).contains(active.asText())
+                || !unique.add(active.asText()))
+              throw new ResponseStatusException(BAD_REQUEST, "unknown_graph_reference");
+        }
       }
     }
   }

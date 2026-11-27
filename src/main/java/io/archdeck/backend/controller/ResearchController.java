@@ -5,7 +5,6 @@ import static org.springframework.http.HttpStatus.*;
 import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.node.*;
 import io.archdeck.backend.service.*;
-import java.net.URI;
 import java.net.http.*;
 import java.time.*;
 import java.util.*;
@@ -20,19 +19,24 @@ import org.springframework.web.server.ResponseStatusException;
 @org.springframework.scheduling.annotation.EnableScheduling
 @RestController
 @RequestMapping("/api/research")
-public class ResearchController implements org.springframework.boot.ApplicationRunner {
+public class ResearchController {
   private final JdbcTemplate db;
   private final ContentStore store;
   private final ObjectMapper json;
-  private final ExecutorService worker = Executors.newSingleThreadExecutor();
+  private final DistributedResearch queue;
+  private final TopicRevisions revisions;
   private final String agentUrl, token;
 
   public ResearchController(
       JdbcTemplate d,
       ContentStore s,
       ObjectMapper j,
+      DistributedResearch q,
+      TopicRevisions rev,
       @Value("${ARCHDECK_AGENT_URL:http://127.0.0.1:4010}") String url,
       @Value("${ARCHDECK_AGENT_SERVICE_TOKEN:}") String t) {
+    queue = q;
+    revisions = rev;
     db = d;
     store = s;
     json = j;
@@ -82,16 +86,17 @@ public class ResearchController implements org.springframework.boot.ApplicationR
           m.put(
               "result", r.getString("result") == null ? null : store.parse(r.getString("result")));
           m.put("error", r.getString("error"));
+          m.put("leaseOwner", r.getString("lease_owner"));
+          m.put("leaseFence", r.getLong("lease_fence"));
+          m.put("leaseUntil", r.getTimestamp("lease_until"));
+          m.put("heartbeatAt", r.getTimestamp("heartbeat_at"));
+          m.put("attempt", r.getInt("attempt"));
           return m;
         });
   }
 
   @PostMapping("/runs")
   Map<String, Object> run(@RequestBody Map<String, String> b) {
-    if (db.queryForObject(
-            "select count(*) from archdeck.research_runs where status in ('queued','running')",
-            Integer.class)
-        >= 20) throw new ResponseStatusException(TOO_MANY_REQUESTS, "research_queue_full");
     String policyId = b.get("policyId");
     JsonNode p =
         policies().stream()
@@ -100,87 +105,7 @@ public class ResearchController implements org.springframework.boot.ApplicationR
             .orElseThrow(() -> new ResponseStatusException(NOT_FOUND));
     if (token.isBlank())
       throw new ResponseStatusException(SERVICE_UNAVAILABLE, "agent_not_configured");
-    String id = UUID.randomUUID().toString();
-    db.update(
-        "insert into"
-            + " archdeck.research_runs(id,policy_id,status,policy_snapshot)values(?::uuid,?::uuid,'queued',?::jsonb)",
-        id,
-        policyId,
-        store.string(p));
-    worker.submit(() -> execute(id, p));
-    return Map.of("id", id, "status", "queued");
-  }
-
-  void execute(String id, JsonNode p) {
-    try {
-      int claimed =
-          db.update(
-              "update archdeck.research_runs set status='running'where id=?::uuid and"
-                  + " status='queued'",
-              id);
-      if (claimed == 0) return;
-      var policy = json.createObjectNode();
-      policy.put("domain_id", p.path("domainId").asText("agent-engineering"));
-      policy.put("version", p.path("version").asInt(1));
-      policy.put("lookback_days", p.path("lookbackDays").asInt(14));
-      policy.put("max_documents", p.path("maxDocuments").asInt(5));
-      policy.put("max_input_characters", p.path("maxInputCharacters").asInt(20000));
-      policy.set("sources", p.path("sources"));
-      policy.put("auto_publish", false);
-      var request = json.createObjectNode();
-      request.put("runId", id);
-      request.put("leaseFence", 1);
-      request.put(
-          "asOf",
-          db.queryForObject(
-                  "select created_at from archdeck.research_runs where id=?::uuid",
-                  java.sql.Timestamp.class,
-                  id)
-              .toInstant()
-              .toString());
-      request.set("policy", policy);
-      var http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
-      var response =
-          http.send(
-              HttpRequest.newBuilder(URI.create(agentUrl + "/internal/runs/" + id + "/execute"))
-                  .timeout(Duration.ofSeconds(150))
-                  .header("Authorization", "Bearer " + token)
-                  .header("Content-Type", "application/json")
-                  .POST(HttpRequest.BodyPublishers.ofString(store.string(request)))
-                  .build(),
-              HttpResponse.BodyHandlers.ofString());
-      if (response.statusCode() != 200)
-        throw new IllegalStateException("agent_http_" + response.statusCode());
-      var result = store.parse(response.body());
-      db.update(
-          "update archdeck.research_runs set status=?,result=?::jsonb where id=?::uuid and"
-              + " status='running'",
-          result.path("status").asText("failed"),
-          store.string(result),
-          id);
-      if (result.path("status").asText().equals("needs_review")
-          && "needs_review"
-              .equals(
-                  db.queryForObject(
-                      "select status from archdeck.research_runs where id=?::uuid",
-                      String.class,
-                      id))) {
-        var candidate = (ObjectNode) result.path("draft").deepCopy();
-        candidate.set("documents", result.path("documents"));
-        candidate.set("issues", result.path("issues"));
-        db.update(
-            "insert into"
-                + " archdeck.knowledge_candidates(id,run_id,payload)values(?::uuid,?::uuid,?::jsonb)",
-            UUID.randomUUID().toString(),
-            id,
-            store.string(candidate));
-      }
-    } catch (Exception e) {
-      db.update(
-          "update archdeck.research_runs set status='failed',error='agent_execution_failed'where"
-              + " id=?::uuid and status='running'",
-          id);
-    }
+    return queue.enqueue(p, null);
   }
 
   @GetMapping("/candidates")
@@ -193,7 +118,8 @@ public class ResearchController implements org.springframework.boot.ApplicationR
           p.put("runId", r.getString("run_id"));
           p.put("status", r.getString("status"));
           p.put("candidateVersion", r.getLong("version"));
-          p.putNull("baseLockVersion");
+          if (!p.has("baseLockVersion")) p.putNull("baseLockVersion");
+          if (!p.has("proposalKind")) p.put("proposalKind", "insight");
           return p;
         });
   }
@@ -201,18 +127,23 @@ public class ResearchController implements org.springframework.boot.ApplicationR
   @PostMapping("/candidates/{id}/review")
   void review(
       @PathVariable String id,
-      @RequestBody Map<String, String> b,
+      @RequestBody JsonNode b,
       @AuthenticationPrincipal Accounts.Principal user) {
-    if (!List.of("reject", "request_changes", "comment").contains(b.get("action")))
+    if (!List.of("reject", "request_changes", "comment").contains(b.path("action").asText()))
       throw new ResponseStatusException(BAD_REQUEST);
-    db.update(
-        "update archdeck.knowledge_candidates set"
-            + " status=?,reviewer_id=?::uuid,review_reason=?,version=version+1 where id=?::uuid and"
-            + " status<>'published'",
-        b.get("action"),
-        user.id(),
-        b.getOrDefault("reason", ""),
-        id);
+    int updated =
+        db.update(
+            "update archdeck.knowledge_candidates set"
+                + " status=?,reviewer_id=?::uuid,review_reason=?,version=version+1 where id=?::uuid"
+                + " and status<>'published' and version=?",
+            b.path("action").asText().equals("comment")
+                ? "needs_review"
+                : b.path("action").asText(),
+            user.id(),
+            b.path("reason").asText(),
+            id,
+            b.path("candidateVersion").asLong(-1));
+    if (updated != 1) throw new ResponseStatusException(CONFLICT, "candidate_conflict");
   }
 
   @Transactional
@@ -229,7 +160,15 @@ public class ResearchController implements org.springframework.boot.ApplicationR
     if (rows.isEmpty()) throw new ResponseStatusException(NOT_FOUND);
     var row = rows.getFirst();
     if (row.get("status").equals("published"))
-      return store.get("insight", row.get("published_content_id").toString());
+      return store.get(
+          store
+                  .parse(row.get("payload").toString())
+                  .path("proposalKind")
+                  .asText()
+                  .equals("topic_revision")
+              ? "topic"
+              : "insight",
+          revisions.contentIdentity(row.get("published_content_id").toString()));
     if (!row.get("status").equals("needs_review")
         || ((Number) row.get("version")).longValue() != b.path("candidateVersion").asLong())
       throw new ResponseStatusException(CONFLICT);
@@ -239,11 +178,19 @@ public class ResearchController implements org.springframework.boot.ApplicationR
     validateEvidence(p);
     if (!p.path("issues").isEmpty() || p.path("claims").isEmpty())
       throw new ResponseStatusException(BAD_REQUEST, "evidence_required");
-    String content = UUID.randomUUID().toString();
-    p.put("id", content);
-    p.put("slug", "insight-" + content);
-    p.put("publishedAt", Instant.now().toString());
-    JsonNode saved = store.save("insight", p, null, user.id());
+    boolean topicRevision = p.path("proposalKind").asText().equals("topic_revision");
+    String content;
+    JsonNode saved;
+    if (topicRevision) {
+      saved = revisions.publish(p, b, user.id());
+      content = store.identity(saved.path("id").asText()).toString();
+    } else {
+      content = UUID.randomUUID().toString();
+      p.put("id", content);
+      p.put("slug", "insight-" + content);
+      p.put("publishedAt", Instant.now().toString());
+      saved = store.save("insight", p, null, user.id());
+    }
     for (JsonNode source : p.path("documents")) {
       String url = source.path("url").asText();
       String sourceId =
@@ -273,37 +220,19 @@ public class ResearchController implements org.springframework.boot.ApplicationR
     return saved;
   }
 
-  public void run(org.springframework.boot.ApplicationArguments args) {
-    db.update(
-        "update archdeck.research_runs set status='failed',error='interrupted_restart'where"
-            + " status='running'");
-    for (var row :
-        db.queryForList(
-            "select id,policy_snapshot::text from archdeck.research_runs where status='queued' and"
-                + " policy_snapshot is not null"))
-      worker.submit(
-          () ->
-              execute(
-                  row.get("id").toString(), store.parse(row.get("policy_snapshot").toString())));
-  }
-
   @PostMapping("/runs/{id}/cancel")
   void cancel(@PathVariable String id) {
-    db.update(
-        "update archdeck.research_runs set status='cancelled' where id=?::uuid and status in"
-            + " ('queued','running')",
-        id);
-    try {
-      HttpClient.newHttpClient()
-          .send(
-              HttpRequest.newBuilder(URI.create(agentUrl + "/internal/runs/" + id + "/cancel"))
-                  .timeout(Duration.ofSeconds(5))
-                  .header("Authorization", "Bearer " + token)
-                  .POST(HttpRequest.BodyPublishers.noBody())
-                  .build(),
-              HttpResponse.BodyHandlers.discarding());
-    } catch (Exception ignored) {
-    }
+    queue.cancel(id);
+  }
+
+  @GetMapping("/candidates/{id}/diff")
+  JsonNode diff(@PathVariable String id) {
+    return revisions.diff(id);
+  }
+
+  @PostMapping("/candidates/{id}/revision")
+  JsonNode revision(@PathVariable String id, @RequestBody JsonNode body) {
+    return revisions.revise(id, body);
   }
 
   void validateEvidence(JsonNode candidate) {
@@ -332,17 +261,7 @@ public class ResearchController implements org.springframework.boot.ApplicationR
       int interval = policy.path("intervalMinutes").asInt(1440);
       if (interval < 15 || interval > 10080) continue;
       String slot = Long.toString(Instant.now().getEpochSecond() / (interval * 60L));
-      String id = UUID.randomUUID().toString();
-      int inserted =
-          db.update(
-              "insert into"
-                  + " archdeck.research_runs(id,policy_id,status,policy_snapshot,schedule_slot)values(?::uuid,?::uuid,'queued',?::jsonb,?)"
-                  + " on conflict do nothing",
-              id,
-              policy.path("id").asText(),
-              store.string(policy),
-              slot);
-      if (inserted == 1) worker.submit(() -> execute(id, policy));
+      queue.enqueue(policy, slot);
     }
   }
 }

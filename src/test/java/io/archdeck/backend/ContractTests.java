@@ -67,4 +67,58 @@ class ContractTests {
     assertThrows(ResponseStatusException.class, () -> store.save("glossary", invalid, null, null));
     verifyNoInteractions(db);
   }
+
+  @Test
+  void directedGraphRejectsUnknownEdgesDuplicateIdsAndInvalidCoordinatesBeforeWriting() {
+    var db = mock(JdbcTemplate.class);
+    var json = new ObjectMapper();
+    var store = new ContentStore(db, json);
+    var topic = json.createObjectNode().put("title", "Graph");
+    topic.putArray("diagramNodes").addObject().put("id", "browser").put("label", "Browser");
+    topic
+        .putArray("diagramEdges")
+        .addObject()
+        .put("id", "bad")
+        .put("source", "browser")
+        .put("target", "missing");
+    assertThrows(ResponseStatusException.class, () -> store.save("topic", topic, null, null));
+    topic.withArray("diagramEdges").removeAll();
+    topic
+        .withArray("flowSteps")
+        .addObject()
+        .put("title", "Missing edge")
+        .putArray("activeEdgeIds")
+        .add("missing");
+    assertThrows(ResponseStatusException.class, () -> store.save("topic", topic, null, null));
+    topic.withArray("flowSteps").removeAll();
+    ((com.fasterxml.jackson.databind.node.ObjectNode) topic.withArray("diagramNodes").get(0))
+        .put("x", Double.NaN);
+    assertThrows(ResponseStatusException.class, () -> store.save("topic", topic, null, null));
+    verifyNoInteractions(db);
+  }
+
+  @Test
+  void revisionPatchPreservesCanonicalGraphAndRejectsModelOwnedFields() {
+    var db = mock(JdbcTemplate.class);
+    var json = new ObjectMapper();
+    var store = new ContentStore(db, json);
+    var revisions = new io.archdeck.backend.service.TopicRevisions(db, store, json);
+    var before =
+        json.createObjectNode().put("id", "spa").put("title", "Canonical").put("lockVersion", 3);
+    before.putArray("diagramNodes").addObject().put("id", "browser").put("label", "Browser");
+    before.putArray("codeSnippets").addObject().put("code", "keep this source");
+    var target = json.createObjectNode().put("baseLockVersion", 3);
+    target.set("topic", before);
+    var candidate = json.createObjectNode();
+    var patch = json.createObjectNode().put("summary", "Evidence-backed summary");
+    revisions.attach(candidate, target, patch);
+    assertEquals(before.path("diagramNodes"), candidate.path("proposedTopic").path("diagramNodes"));
+    assertEquals(before.path("codeSnippets"), candidate.path("proposedTopic").path("codeSnippets"));
+    assertEquals("Canonical", candidate.path("proposedTopic").path("title").asText());
+    assertEquals(
+        "Evidence-backed summary", candidate.path("proposedTopic").path("summary").asText());
+    patch.put("lockVersion", 100);
+    assertThrows(ResponseStatusException.class, () -> revisions.attach(candidate, target, patch));
+    verifyNoInteractions(db);
+  }
 }
